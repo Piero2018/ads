@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileSpreadsheet, 
-  Download, 
-  Upload, 
-  RotateCcw, 
   Plus, 
   X,
   Sparkles,
@@ -143,57 +140,6 @@ export default function App() {
     setFocusedAuditId(null);
   };
 
-  // Restore Default Mock Data
-  const handleRestoreDefaults = () => {
-    if (confirm('¿Desea restablecer todos los datos de prueba predeterminados de la agencia? Perderá los cambios no exportados.')) {
-      saveAudits(INITIAL_AUDITS);
-      setEditingAudit(null);
-      setFocusedAuditId(null);
-      triggerToast('Datos de prueba de Vortex Media restablecidos correctamente.');
-    }
-  };
-
-  // Export Audits to JSON file
-  const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(audits, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `meta_ads_audits_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    triggerToast('Datos exportados en formato JSON.');
-  };
-
-  // Import Audits from JSON file
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], "UTF-8");
-      fileReader.onload = (event) => {
-        try {
-          const parsed = JSON.parse(event.target?.result as string);
-          if (Array.isArray(parsed)) {
-            // Basic validation
-            const isValid = parsed.every(item => 
-              'cliente' in item && 'cuentaMetaAds' in item && 'estado' in item
-            );
-            if (isValid) {
-              saveAudits(parsed);
-              triggerToast('Datos importados correctamente desde archivo.');
-            } else {
-              alert('El archivo no contiene un formato de auditorías válido.');
-            }
-          } else {
-            alert('El archivo debe contener un array de auditorías.');
-          }
-        } catch (error) {
-          alert('Error al leer el archivo JSON.');
-        }
-      };
-    }
-  };
-
   // Total active alerts calculation for header indicator
   const totalAlerts = audits.filter(a => a.estado === 'no_implementado' || isCorrectionOverdue(a)).length;
 
@@ -235,37 +181,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Action Tools */}
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <button
-              onClick={handleRestoreDefaults}
-              className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="Restablecer cuentas demo"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-              <span>Demo</span>
-            </button>
-
-            <button
-              onClick={handleExportJSON}
-              className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="Exportar datos a JSON"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>Exportar</span>
-            </button>
-
-            <label className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer select-none shadow-xs">
-              <Upload className="w-3.5 h-3.5 text-slate-400" />
-              <span>Importar</span>
-              <input 
-                type="file" 
-                accept=".json" 
-                onChange={handleImportJSON} 
-                className="hidden" 
-              />
-            </label>
-          </div>
         </div>
       </div>
 
@@ -276,7 +191,7 @@ export default function App() {
         <MetricCards audits={audits} />
 
         {/* Dynamic Layout: Two Column Grid on Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
           {/* LEFT SIDE: Active audits table, searches, filters, weekly accordion */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
@@ -390,4 +305,3 @@ export default function App() {
     </div>
   );
 }
-
