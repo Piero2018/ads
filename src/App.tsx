@@ -9,7 +9,9 @@ import {
   TrendingUp,
   Layout,
   Table,
-  BarChart3
+  BarChart3,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 
 import Header from './components/Header';
@@ -23,6 +25,21 @@ import { Audit, AuditStatus } from './types';
 import { INITIAL_AUDITS } from './mockData';
 import { isCorrectionOverdue } from './utils/dateUtils';
 
+import { db, auth, AUDITS_COLLECTION } from './firebase';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  query,
+  orderBy,
+} from 'firebase/firestore';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import LoginModal from './components/Login';
+
 export default function App() {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [editingAudit, setEditingAudit] = useState<Audit | null>(null);
@@ -35,26 +52,61 @@ export default function App() {
   // Success Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load from LocalStorage
+  // Loading state while connecting to Firestore
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Auth state: only the logged-in admin can create/edit/delete audits
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const isAdmin = !!user;
+
   useEffect(() => {
-    const saved = localStorage.getItem('meta_ads_audits');
-    if (saved) {
-      try {
-        setAudits(JSON.parse(saved));
-      } catch (e) {
-        setAudits(INITIAL_AUDITS);
-      }
-    } else {
-      setAudits(INITIAL_AUDITS);
-      localStorage.setItem('meta_ads_audits', JSON.stringify(INITIAL_AUDITS));
-    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthChecked(true);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Save to LocalStorage helper
-  const saveAudits = (updatedAudits: Audit[]) => {
-    setAudits(updatedAudits);
-    localStorage.setItem('meta_ads_audits', JSON.stringify(updatedAudits));
+  const handleLogout = () => {
+    signOut(auth);
+    setEditingAudit(null);
+    setShowFormMobile(false);
   };
+
+  // Seed Firestore with initial mock data ONLY if the collection is empty
+  // (runs once, the first time anyone opens the app with an empty database)
+  const seedIfEmpty = async () => {
+    const snapshot = await getDocs(collection(db, AUDITS_COLLECTION));
+    if (snapshot.empty) {
+      await Promise.all(
+        INITIAL_AUDITS.map((audit) => setDoc(doc(db, AUDITS_COLLECTION, audit.id), audit))
+      );
+    }
+  };
+
+  // Subscribe in real time to the "audits" collection in Firestore.
+  // Every person who opens the app reads/writes the SAME shared data.
+  useEffect(() => {
+    seedIfEmpty();
+
+    const auditsQuery = query(collection(db, AUDITS_COLLECTION), orderBy('fechaAuditoria', 'desc'));
+    const unsubscribe = onSnapshot(
+      auditsQuery,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => d.data() as Audit);
+        setAudits(data);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error('Error al conectar con Firestore:', error);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // Trigger Toast helper
   const triggerToast = (message: string) => {
@@ -64,61 +116,66 @@ export default function App() {
     }, 4000);
   };
 
-  // Save / Update Audit
-  const handleSaveAudit = (auditData: Omit<Audit, 'id'> & { id?: string }) => {
-    if (auditData.id) {
-      // Edit
-      const updated = audits.map(a => 
-        a.id === auditData.id ? { ...a, ...auditData } as Audit : a
-      );
-      saveAudits(updated);
-      setEditingAudit(null);
-      triggerToast(`Auditoría de "${auditData.cliente}" actualizada exitosamente.`);
-    } else {
-      // Create
-      const newAudit: Audit = {
-        ...auditData,
-        id: `aud-${Date.now()}`
-      } as Audit;
-      saveAudits([newAudit, ...audits]);
-      triggerToast(`Nueva auditoría de "${auditData.cliente}" registrada exitosamente.`);
+  // Save / Update Audit (writes directly to Firestore; onSnapshot updates the UI for everyone)
+  const handleSaveAudit = async (auditData: Omit<Audit, 'id'> & { id?: string }) => {
+    if (!isAdmin) return;
+    try {
+      if (auditData.id) {
+        // Edit
+        await updateDoc(doc(db, AUDITS_COLLECTION, auditData.id), { ...auditData });
+        setEditingAudit(null);
+        triggerToast(`Auditoría de "${auditData.cliente}" actualizada exitosamente.`);
+      } else {
+        // Create
+        const newId = `aud-${Date.now()}`;
+        const newAudit: Audit = { ...auditData, id: newId } as Audit;
+        await setDoc(doc(db, AUDITS_COLLECTION, newId), newAudit);
+        triggerToast(`Nueva auditoría de "${auditData.cliente}" registrada exitosamente.`);
+      }
+    } catch (error) {
+      console.error('Error al guardar en Firestore:', error);
+      triggerToast('Ocurrió un error al guardar. Intenta nuevamente.');
     }
     setShowFormMobile(false);
   };
 
   // Delete Audit
-  const handleDeleteAudit = (auditId: string) => {
+  const handleDeleteAudit = async (auditId: string) => {
+    if (!isAdmin) return;
     const auditToDelete = audits.find(a => a.id === auditId);
     if (!auditToDelete) return;
     
     if (confirm(`¿Está seguro que desea eliminar la auditoría de ${auditToDelete.cliente}?`)) {
-      const updated = audits.filter(a => a.id !== auditId);
-      saveAudits(updated);
-      if (editingAudit?.id === auditId) {
-        setEditingAudit(null);
+      try {
+        await deleteDoc(doc(db, AUDITS_COLLECTION, auditId));
+        if (editingAudit?.id === auditId) {
+          setEditingAudit(null);
+        }
+        if (focusedAuditId === auditId) {
+          setFocusedAuditId(null);
+        }
+        triggerToast(`Auditoría de "${auditToDelete.cliente}" eliminada.`);
+      } catch (error) {
+        console.error('Error al eliminar en Firestore:', error);
+        triggerToast('Ocurrió un error al eliminar. Intenta nuevamente.');
       }
-      if (focusedAuditId === auditId) {
-        setFocusedAuditId(null);
-      }
-      triggerToast(`Auditoría de "${auditToDelete.cliente}" eliminada.`);
     }
   };
 
   // Quick Resolve from Alerts Panel
-  const handleQuickResolve = (auditId: string) => {
-    const updated = audits.map(a => {
-      if (a.id === auditId) {
-        return {
-          ...a,
-          estado: 'correcto' as AuditStatus,
-          tipoError: 'Ninguno',
-          descripcion: 'Resuelto rápidamente desde el panel de alertas críticas.'
-        };
-      }
-      return a;
-    });
-    saveAudits(updated);
-    triggerToast('¡Implementación marcada como Correcta con éxito!');
+  const handleQuickResolve = async (auditId: string) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, AUDITS_COLLECTION, auditId), {
+        estado: 'correcto' as AuditStatus,
+        tipoError: 'Ninguno',
+        descripcion: 'Resuelto rápidamente desde el panel de alertas críticas.'
+      });
+      triggerToast('¡Implementación marcada como Correcta con éxito!');
+    } catch (error) {
+      console.error('Error al resolver en Firestore:', error);
+      triggerToast('Ocurrió un error. Intenta nuevamente.');
+    }
   };
 
   // Focus specific audit
@@ -181,12 +238,50 @@ export default function App() {
             </p>
           </div>
 
+          {/* Auth control */}
+          <div className="self-start md:self-auto">
+            {authChecked && (
+              isAdmin ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 truncate max-w-[160px]" title={user?.email ?? ''}>
+                    {user?.email}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Cerrar sesión"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Salir</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title="Iniciar sesión para registrar auditorías"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Iniciar sesión</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Login Modal */}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
 
       {/* Main Workspace */}
       <main className="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6" id="app-workspace">
         
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-slate-400 text-sm font-medium">
+            Conectando con la base de datos...
+          </div>
+        ) : (
+        <>
         {/* Metric cards displaying total status counts */}
         <MetricCards audits={audits} />
 
@@ -229,6 +324,7 @@ export default function App() {
                   onDelete={handleDeleteAudit}
                   focusedAuditId={focusedAuditId}
                   onClearFocus={handleClearFocus}
+                  readOnly={!isAdmin}
                 />
               ) : (
                 <WeeklySummaryPanel 
@@ -242,6 +338,8 @@ export default function App() {
           {/* RIGHT SIDE: Alerts and Register/Edit Forms */}
           <div className="space-y-6 lg:col-span-1">
             
+            {isAdmin && (
+            <>
             {/* Form Drawer Toggle on Mobile / Always visible on Desktop */}
             <div className="lg:hidden flex justify-end">
               <button
@@ -276,17 +374,22 @@ export default function App() {
                 }}
               />
             </div>
+            </>
+            )}
 
             {/* Active Alerts Panel (Always Visible) */}
             <AlertsPanel 
               audits={audits} 
               onFocusAudit={handleFocusAudit}
               onQuickResolve={handleQuickResolve}
+              readOnly={!isAdmin}
             />
 
           </div>
 
         </div>
+        </>
+        )}
       </main>
 
       {/* Footer */}

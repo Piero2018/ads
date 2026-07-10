@@ -10,12 +10,13 @@ interface AuditTableProps {
   onDelete: (auditId: string) => void;
   focusedAuditId: string | null;
   onClearFocus: () => void;
+  readOnly?: boolean;
 }
 
 type SortField = 'cliente' | 'cuentaMetaAds' | 'estado' | 'fechaAuditoria' | 'responsable';
 type SortOrder = 'asc' | 'desc';
 
-export default function AuditTable({ audits, onEdit, onDelete, focusedAuditId, onClearFocus }: AuditTableProps) {
+export default function AuditTable({ audits, onEdit, onDelete, focusedAuditId, onClearFocus, readOnly = false }: AuditTableProps) {
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState<string>('todos');
@@ -280,13 +281,13 @@ export default function AuditTable({ audits, onEdit, onDelete, focusedAuditId, o
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                 </div>
               </th>
-              <th className="py-3 px-4 text-right">Acciones</th>
+              {!readOnly && <th className="py-3 px-4 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 text-sm font-sans bg-white">
             {paginatedAudits.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-400 text-xs font-semibold">
+                <td colSpan={readOnly ? 5 : 6} className="py-12 text-center text-slate-400 text-xs font-semibold">
                   No se encontraron auditorías con los criterios de búsqueda especificados.
                 </td>
               </tr>
@@ -334,6 +335,7 @@ export default function AuditTable({ audits, onEdit, onDelete, focusedAuditId, o
                         {a.responsable}
                       </span>
                     </td>
+                    {!readOnly && (
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end space-x-1.5">
                         <button
@@ -352,6 +354,7 @@ export default function AuditTable({ audits, onEdit, onDelete, focusedAuditId, o
                         </button>
                       </div>
                     </td>
+                    )}
                   </tr>
                 );
               })

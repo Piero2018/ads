@@ -7,9 +7,10 @@ interface AlertsPanelProps {
   audits: Audit[];
   onFocusAudit: (auditId: string) => void;
   onQuickResolve: (auditId: string) => void;
+  readOnly?: boolean;
 }
 
-export default function AlertsPanel({ audits, onFocusAudit, onQuickResolve }: AlertsPanelProps) {
+export default function AlertsPanel({ audits, onFocusAudit, onQuickResolve, readOnly = false }: AlertsPanelProps) {
   // 1. Unimplemented accounts alerts
   const unimplemented = audits.filter(a => a.estado === 'no_implementado');
   
@@ -95,14 +96,18 @@ export default function AlertsPanel({ audits, onFocusAudit, onQuickResolve }: Al
                     <span>Ver</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
-                  <span className="text-slate-700">|</span>
-                  <button
-                    onClick={() => onQuickResolve(a.id)}
-                    className="text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer transition-colors"
-                    title="Marcar como correcto"
-                  >
-                    Resolver
-                  </button>
+                  {!readOnly && (
+                    <>
+                      <span className="text-slate-700">|</span>
+                      <button
+                        onClick={() => onQuickResolve(a.id)}
+                        className="text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer transition-colors"
+                        title="Marcar como correcto"
+                      >
+                        Resolver
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -158,13 +163,17 @@ export default function AlertsPanel({ audits, onFocusAudit, onQuickResolve }: Al
                       <span>Ver</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
-                    <span className="text-slate-700">|</span>
-                    <button
-                      onClick={() => onQuickResolve(a.id)}
-                      className="text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer transition-colors"
-                    >
-                      Resolver
-                    </button>
+                    {!readOnly && (
+                      <>
+                        <span className="text-slate-700">|</span>
+                        <button
+                          onClick={() => onQuickResolve(a.id)}
+                          className="text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer transition-colors"
+                        >
+                          Resolver
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
