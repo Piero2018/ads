@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, ShieldCheck, Clock } from 'lucide-react';
 // @ts-ignore
 import papayaLogo from '../assets/images/papaya_logo_1783575599254.jpg';
+import { getTodayPeru, formatReadableDate } from '../utils/dateUtils';
 
 interface HeaderProps {
   totalAlerts: number;
 }
 
 export default function Header({ totalAlerts }: HeaderProps) {
+  // Real current date in Peru's timezone, refreshed periodically so it
+  // stays correct even if the app is left open across midnight.
+  const [today, setToday] = useState(getTodayPeru());
+
+  useEffect(() => {
+    const interval = setInterval(() => setToday(getTodayPeru()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Agency branding details - Professional Polish theme
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40" id="app-header">
@@ -51,7 +61,7 @@ export default function Header({ totalAlerts }: HeaderProps) {
 
             <div className="flex items-center space-x-1.5 font-mono text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded border border-slate-200">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>08/07/2026</span>
+              <span>{formatReadableDate(today)}</span>
             </div>
           </div>
         </div>

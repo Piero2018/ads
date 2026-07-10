@@ -1,5 +1,17 @@
 import { Audit, WeeklySummary } from '../types';
 
+// Get today's date (YYYY-MM-DD) in Peru's timezone (America/Lima, UTC-5, no DST)
+// This ensures the "current date" is always correct regardless of where the
+// server/browser rendering the app is physically located.
+export function getTodayPeru(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 // Get the Monday and Sunday of the week for a given date
 export function getWeekRange(dateString: string): { start: Date; end: Date } {
   const date = new Date(dateString + 'T00:00:00');
@@ -48,7 +60,7 @@ export function getWeekLabel(dateString: string): string {
 
 // Check if a correction has been unresolved for more than 7 days
 // Given the audit and today's date (represented by the system's current time)
-export function isCorrectionOverdue(audit: Audit, todayStr: string = '2026-07-08'): boolean {
+export function isCorrectionOverdue(audit: Audit, todayStr: string = getTodayPeru()): boolean {
   if (audit.estado !== 'correccion_requerida') return false;
   
   // We use the fechaAuditoria (creation date) or fechaRevision (revision date)
@@ -63,7 +75,7 @@ export function isCorrectionOverdue(audit: Audit, todayStr: string = '2026-07-08
 }
 
 // Calculate the number of days elapsed since the audit was created
-export function getDaysElapsed(auditDateStr: string, todayStr: string = '2026-07-08'): number {
+export function getDaysElapsed(auditDateStr: string, todayStr: string = getTodayPeru()): number {
   const auditDate = new Date(auditDateStr + 'T00:00:00');
   const today = new Date(todayStr + 'T00:00:00');
   const diffTime = today.getTime() - auditDate.getTime();

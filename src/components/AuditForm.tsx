@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PlusCircle, Save, Undo, RefreshCw, AlertCircle } from 'lucide-react';
 import { Audit, AuditStatus } from '../types';
 import { ERROR_TYPES, RESPONSIBLES } from '../mockData';
+import { getTodayPeru } from '../utils/dateUtils';
 
 interface AuditFormProps {
   onSave: (audit: Omit<Audit, 'id'> & { id?: string }) => void;
@@ -11,7 +12,7 @@ interface AuditFormProps {
 
 export default function AuditForm({ onSave, editingAudit, onCancelEdit }: AuditFormProps) {
   // Current date in system context: 2026-07-08
-  const TODAY = '2026-07-08';
+  const TODAY = getTodayPeru();
 
   const [cliente, setCliente] = useState('');
   const [cuentaMetaAds, setCuentaMetaAds] = useState('');
